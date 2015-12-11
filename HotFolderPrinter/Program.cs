@@ -114,8 +114,13 @@ namespace HotFolderPrinter {
                     pd.PrinterSettings.DefaultPageSettings.PaperSize = printer.PaperSize;
 
                     pd.PrintPage += (sender, e) => {
-                        Image i = Image.FromFile(fileName);
-                        e.Graphics.DrawImage(i, 0, 0, e.PageBounds.Width, e.PageBounds.Height);
+                        Image img = Image.FromFile(fileName);
+
+                        RectangleF target = new Rectangle(0, 0, e.PageBounds.Width, e.PageBounds.Height);
+                        var coords = V2Lib.Imaging.Calculations.ComputeCopyCoords(target, img.Size, V2Lib.Imaging.CroppingModes.CropCenter);
+                       
+                        e.Graphics.DrawImage(img, coords.Destination, coords.Source, GraphicsUnit.Pixel);
+
                     };
                     pd.Print();
 
