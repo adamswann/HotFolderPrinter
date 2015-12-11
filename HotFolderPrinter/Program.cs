@@ -1,68 +1,94 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Drawing.Printing;
 using System.Drawing;
+using System.Collections.Generic;
 
 namespace HotFolderPrinter {
     class Program {
 
-        static ConcurrentQueue<string> fileQueue = new ConcurrentQueue<string>();
+        static ConcurrentQueue<Tuple<HotFolder, string>> fileQueue = new ConcurrentQueue<Tuple<HotFolder, string>>();
 
         static void Main(string[] args) {
 
-            string printerName = "Adobe PDF";
-            string paperSizeName = "4x6";
+            var folderList = new List<HotFolder>();
 
-            FileSystemWatcher fsw = new FileSystemWatcher(@"C:\UUMCSanta\Incoming", "*.jpg");
-            fsw.Created += Fsw_Created;
-            fsw.EnableRaisingEvents = true;
+            folderList.Add(new HotFolder() {
+                Path = @"C:\UUMCSanta\Incoming",
+                OutputPath = @"C:\UUMCSanta\Printed",
+                PrinterName = "Adobe PDF",
+                PaperSizeName = "4x6"
+            });
 
-            PaperSize paperSize = null;
+            /****/
 
-            {
+            foreach (var hotFolder in folderList) {
+
+                #region Spin up the folder watcher
+                FileSystemWatcher fsw = new FileSystemWatcher(hotFolder.Path, "*.jpg");
+                fsw.Created += (sender, e) => {
+                    fileQueue.Enqueue(new Tuple<HotFolder,string>(hotFolder,e.FullPath));
+                };
+
+                #endregion
+
+                #region Verify Printer and Paper
 
                 PrintDocument pd = new PrintDocument();
-                pd.PrinterSettings.PrinterName = printerName;
+                pd.PrinterSettings.PrinterName = hotFolder.PrinterName;
                 foreach (PaperSize item in pd.PrinterSettings.PaperSizes) {
                     Console.WriteLine("Size: {0} ({1}x{2})", item.PaperName, item.Width, item.Height);
 
-                    if (item.PaperName == paperSizeName) {
-                        paperSize = item;
+                    if (item.PaperName == hotFolder.PaperSizeName) {
+                        hotFolder.PaperSize = item;
                         Console.WriteLine("   ^--- Picked this one.");
                     }
 
                 }
+
+                if (hotFolder.PaperSize == null)
+                    throw new InvalidOperationException(String.Format("Could not find paper '{1}' size for printer '{0}'.", hotFolder.PrinterName, hotFolder.PaperSizeName));
+
+                #endregion
+
+                fsw.EnableRaisingEvents = true;
             }
 
+
+
             while (true) {
-                string fileToProcess;
+                Tuple<HotFolder,string> fileToProcess;
 
                 if (fileQueue.TryDequeue(out fileToProcess)) {
 
+
+                    HotFolder hotFolder = fileToProcess.Item1;
+                    string originalFileName = fileToProcess.Item2;
+                    string fileName = originalFileName;
+
+                    if (!string.IsNullOrEmpty(hotFolder.OutputPath)) {
+                        if (!Directory.Exists(hotFolder.OutputPath)) {
+                            Directory.CreateDirectory(hotFolder.OutputPath);
+                        }
+                        fileName = Path.Combine(hotFolder.OutputPath, Path.GetFileName(originalFileName));
+                        File.Move(originalFileName, fileName);
+                      
+                    }
+
                     PrintDocument pd = new PrintDocument();
-                    pd.PrinterSettings.PrinterName = printerName;
-                    pd.DocumentName = Path.GetFileName(fileToProcess);
-                    pd.DefaultPageSettings.PaperSize = paperSize;
+                    pd.PrinterSettings.PrinterName = hotFolder.PrinterName;
+                    pd.DocumentName = Path.GetFileName(fileName);
+                    pd.DefaultPageSettings.PaperSize = hotFolder.PaperSize;
                     pd.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
-                    pd.PrinterSettings.DefaultPageSettings.PaperSize = paperSize;
+                    pd.PrinterSettings.DefaultPageSettings.PaperSize = hotFolder.PaperSize;
 
                     pd.PrintPage += (sender, e) => {
-
-                        float page_w = e.PageBounds.Width;
-                        float page_h = e.PageBounds.Height;
-
-
-
-                        Image i = Image.FromFile(fileToProcess);
-                        e.Graphics.DrawImage(i, 0, 0, page_w, page_h);
+                        Image i = Image.FromFile(fileName);
+                        e.Graphics.DrawImage(i, 0, 0, e.PageBounds.Width, e.PageBounds.Height);
                     };
                     pd.Print();
-
 
                 }
 
@@ -72,10 +98,5 @@ namespace HotFolderPrinter {
 
         }
 
-
-        private static void Fsw_Created(object sender, FileSystemEventArgs e) {
-            Console.WriteLine("File created: {0}", e.Name);
-            fileQueue.Enqueue(e.FullPath);
-        }
     }
 }
