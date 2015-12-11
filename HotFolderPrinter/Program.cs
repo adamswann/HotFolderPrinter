@@ -72,7 +72,22 @@ namespace HotFolderPrinter {
                         if (!Directory.Exists(hotFolder.OutputPath)) {
                             Directory.CreateDirectory(hotFolder.OutputPath);
                         }
+
                         fileName = Path.Combine(hotFolder.OutputPath, Path.GetFileName(originalFileName));
+
+                        if (File.Exists(fileName)) {
+                            string withoutPath = Path.GetFileName(originalFileName);
+                            string withoutExtension = Path.GetFileNameWithoutExtension(withoutPath);
+                            string extension = Path.GetExtension(withoutPath);
+
+                            int i = 1;
+                            do {
+                                fileName = Path.Combine(hotFolder.OutputPath, String.Format("{0}_{1}{2}", withoutExtension, i, extension));
+                                i++;
+                            } while (File.Exists(fileName));
+
+                        }
+
                         File.Move(originalFileName, fileName);
                       
                     }
