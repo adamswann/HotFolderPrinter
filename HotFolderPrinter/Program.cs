@@ -18,8 +18,9 @@ namespace HotFolderPrinter {
             folderList.Add(new HotFolder() {
                 Path = @"C:\UUMCSanta\Incoming",
                 OutputPath = @"C:\UUMCSanta\Printed",
-                PrinterName = "Adobe PDF",
-                PaperSizeName = "4x6"
+                PrinterPool = new List<Printer>() {
+                    new Printer() { PrinterName = "Adobe PDF", PaperSizeName = "4x6"}
+                }
             });
 
             /****/
@@ -36,20 +37,23 @@ namespace HotFolderPrinter {
 
                 #region Verify Printer and Paper
 
-                PrintDocument pd = new PrintDocument();
-                pd.PrinterSettings.PrinterName = hotFolder.PrinterName;
-                foreach (PaperSize item in pd.PrinterSettings.PaperSizes) {
-                    Console.WriteLine("Size: {0} ({1}x{2})", item.PaperName, item.Width, item.Height);
+                foreach (var printer in hotFolder.PrinterPool) {
+                    PrintDocument pd = new PrintDocument();
+                    pd.PrinterSettings.PrinterName = printer.PrinterName;
+                    foreach (PaperSize item in pd.PrinterSettings.PaperSizes) {
+                        Console.WriteLine("Size: {0} ({1}x{2})", item.PaperName, item.Width, item.Height);
 
-                    if (item.PaperName == hotFolder.PaperSizeName) {
-                        hotFolder.PaperSize = item;
-                        Console.WriteLine("   ^--- Picked this one.");
+                        if (item.PaperName == printer.PaperSizeName) {
+                            printer.PaperSize = item;
+                            Console.WriteLine("   ^--- Picked this one.");
+                        }
+
                     }
 
-                }
+                    if (printer.PaperSize == null)
+                        throw new InvalidOperationException(String.Format("Could not find paper '{1}' size for printer '{0}'.", printer.PrinterName, printer.PaperSizeName));
 
-                if (hotFolder.PaperSize == null)
-                    throw new InvalidOperationException(String.Format("Could not find paper '{1}' size for printer '{0}'.", hotFolder.PrinterName, hotFolder.PaperSizeName));
+                }
 
                 #endregion
 
@@ -92,18 +96,30 @@ namespace HotFolderPrinter {
                       
                     }
 
+                    // Round-Robin... PrintCount increments with each job.
+                    //     For a pool size of 3:
+                    //       0 % 3 = 0
+                    //       1 % 3 = 1
+                    //       2 % 3 = 2
+                    //       3 % 3 = 0...
+                    int printerIndex = hotFolder.PrintCount % hotFolder.PrinterPool.Count;
+
+                    Printer printer = hotFolder.PrinterPool[printerIndex];
+
                     PrintDocument pd = new PrintDocument();
-                    pd.PrinterSettings.PrinterName = hotFolder.PrinterName;
+                    pd.PrinterSettings.PrinterName = printer.PrinterName;
                     pd.DocumentName = Path.GetFileName(fileName);
-                    pd.DefaultPageSettings.PaperSize = hotFolder.PaperSize;
+                    pd.DefaultPageSettings.PaperSize = printer.PaperSize;
                     pd.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
-                    pd.PrinterSettings.DefaultPageSettings.PaperSize = hotFolder.PaperSize;
+                    pd.PrinterSettings.DefaultPageSettings.PaperSize = printer.PaperSize;
 
                     pd.PrintPage += (sender, e) => {
                         Image i = Image.FromFile(fileName);
                         e.Graphics.DrawImage(i, 0, 0, e.PageBounds.Width, e.PageBounds.Height);
                     };
                     pd.Print();
+
+                    hotFolder.PrintCount++;
 
                 }
 

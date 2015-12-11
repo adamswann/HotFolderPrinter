@@ -8,14 +8,16 @@ using System.Threading.Tasks;
 
 namespace HotFolderPrinter {
     public class HotFolder {
-
+        public HotFolder() {
+            this.PrinterPool = new List<Printer>();
+        }
+ 
         public string Path { get; set; }
-        public string PrinterName { get; set; }
-        public string PaperSizeName { get; set; }
 
         public string OutputPath { get; set; }
 
+        public IList<Printer> PrinterPool { get; set; }
 
-        internal PaperSize PaperSize { get; set; }
+        internal int PrintCount { get; set; }
     }
 }
